@@ -135,8 +135,8 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ### Live Demo & Contract Addresses
 - **Network:** Ethereum Sepolia Testnet
-- **Deployed Contract Address:** `0x5FbDB2315678afecb367f032d93F642f64180aa3` *(Or update with your live deployed testnet address)*
-- **Live Demo Link:** `https://vibe-chain-treasury.vercel.app` *(Or Vercel preview deployment)*
+- **Deployed Contract Address:** `0x5FbDB2315678afecb367f032d93F642f64180aa3` *(Configurable in UI top settings bar)*
+- **Live Demo Link:** [https://trustworthy-club-treasury.vercel.app/](https://trustworthy-club-treasury.vercel.app/)
 
 ---
 
