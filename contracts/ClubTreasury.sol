@@ -443,21 +443,21 @@ contract ClubTreasury {
         if (block.timestamp < prop.votingDeadline) {
             return "ACTIVE";
         }
-        if (block.timestamp > prop.votingDeadline + EXECUTION_WINDOW) {
-            return "EXPIRED";
+        if (activeMemberCount == 0) {
+            return "REJECTED";
         }
 
         uint256 minQuorum = (activeMemberCount * 20 + 99) / 100;
         if (minQuorum < 2 && activeMemberCount > 1) { minQuorum = 2; }
         if (minQuorum == 0) { minQuorum = 1; }
 
-        if (prop.yesVotes + prop.noVotes < minQuorum) {
+        if (prop.yesVotes + prop.noVotes < minQuorum || prop.yesVotes <= prop.noVotes) {
             return "REJECTED";
         }
-        if (prop.yesVotes > prop.noVotes) {
-            return "PASSED";
+        if (block.timestamp > prop.votingDeadline + EXECUTION_WINDOW) {
+            return "EXPIRED";
         }
-        return "REJECTED";
+        return "PASSED";
     }
 
     /**

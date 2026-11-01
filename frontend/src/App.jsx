@@ -54,13 +54,23 @@ export default function App() {
   // Get Contract helper
   const getContract = useCallback(
     async (withSigner = false) => {
-      if (!window.ethereum) return null;
-      const provider = new ethers.BrowserProvider(window.ethereum);
       if (withSigner) {
+        if (!window.ethereum) return null;
+        const provider = new ethers.BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
         return new ethers.Contract(contractAddress, TREASURY_ABI, signer);
       }
-      return new ethers.Contract(contractAddress, TREASURY_ABI, provider);
+      if (window.ethereum) {
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        return new ethers.Contract(contractAddress, TREASURY_ABI, provider);
+      }
+      try {
+        const rpcUrl = import.meta.env.VITE_RPC_URL || "https://rpc.sepolia.org";
+        const provider = new ethers.JsonRpcProvider(rpcUrl);
+        return new ethers.Contract(contractAddress, TREASURY_ABI, provider);
+      } catch {
+        return null;
+      }
     },
     [contractAddress]
   );
@@ -204,8 +214,12 @@ export default function App() {
   const handleJoinClub = async () => {
     try {
       setIsLoading(true);
-      showToast("loading", "Sending membership fee transaction...", 0);
+      showToast("loading", "Connecting wallet and preparing transaction...", 0);
       const contract = await getContract(true);
+      if (!contract) {
+        showToast("error", "Wallet not connected. Please install MetaMask and connect your account.");
+        return;
+      }
       const fee = await contract.membershipFee();
       const tx = await contract.joinClub({ value: fee });
       showToast("loading", "Mining transaction on-chain...", 0);
@@ -225,6 +239,10 @@ export default function App() {
       setIsLoading(true);
       showToast("loading", "Submitting resignation to blockchain...", 0);
       const contract = await getContract(true);
+      if (!contract) {
+        showToast("error", "Wallet not connected. Please connect your account first.");
+        return;
+      }
       const tx = await contract.leaveClub();
       showToast("loading", "Mining transaction on-chain...", 0);
       await tx.wait();
@@ -243,6 +261,10 @@ export default function App() {
       setIsLoading(true);
       showToast("loading", `Depositing ${ethers.formatEther(amount)} ETH...`, 0);
       const contract = await getContract(true);
+      if (!contract) {
+        showToast("error", "Wallet not connected. Please connect your account to deposit.");
+        return;
+      }
       const tx = await contract.deposit(note, { value: amount });
       await tx.wait();
       showToast("success", "Deposit successfully verified and recorded in audit log!");
@@ -261,6 +283,10 @@ export default function App() {
       setIsLoading(true);
       showToast("loading", "Submitting proposal to blockchain...", 0);
       const contract = await getContract(true);
+      if (!contract) {
+        showToast("error", "Wallet not connected. Please connect your account first.");
+        return;
+      }
       const tx = await contract.createProposal(
         proposalData.pType,
         proposalData.recipient,
@@ -286,6 +312,10 @@ export default function App() {
       setIsLoading(true);
       showToast("loading", `Casting ${support ? "YES" : "NO"} vote...`, 0);
       const contract = await getContract(true);
+      if (!contract) {
+        showToast("error", "Wallet not connected. Please connect your account first.");
+        return;
+      }
       const tx = await contract.vote(proposalId, support);
       await tx.wait();
       showToast("success", `Vote recorded: ${support ? "YES" : "NO"}`);
@@ -303,6 +333,10 @@ export default function App() {
       setIsLoading(true);
       showToast("loading", "Executing approved proposal & transferring funds...", 0);
       const contract = await getContract(true);
+      if (!contract) {
+        showToast("error", "Wallet not connected. Please connect your account first.");
+        return;
+      }
       const tx = await contract.executeProposal(proposalId);
       await tx.wait();
       showToast("success", "Proposal executed! Funds transferred and logged in ledger.");
@@ -321,15 +355,15 @@ export default function App() {
     const isDeadlinePassed = Number(p.votingDeadline) <= now;
     const isWindowExpired = now > Number(p.votingDeadline) + 7 * 86400;
 
-    const activeCount = Number(summary.memberCount || 1n);
+    const activeCount = summary.memberCount !== undefined && summary.memberCount !== null ? Number(summary.memberCount) : 1;
     let minQuorum = Math.ceil((activeCount * 20) / 100);
     if (minQuorum < 2 && activeCount > 1) { minQuorum = 2; }
     if (minQuorum === 0) { minQuorum = 1; }
 
     const totalVotes = Number(p.yesVotes) + Number(p.noVotes);
     const hasQuorum = totalVotes >= minQuorum;
-    const isPassed = isDeadlinePassed && !p.executed && !isWindowExpired && hasQuorum && Number(p.yesVotes) > Number(p.noVotes);
-    const isRejected = isDeadlinePassed && !p.executed && (isWindowExpired || !hasQuorum || Number(p.yesVotes) <= Number(p.noVotes));
+    const isPassed = isDeadlinePassed && !p.executed && !isWindowExpired && activeCount > 0 && hasQuorum && Number(p.yesVotes) > Number(p.noVotes);
+    const isRejected = isDeadlinePassed && !p.executed && (activeCount === 0 || !hasQuorum || Number(p.yesVotes) <= Number(p.noVotes) || isWindowExpired);
 
     if (proposalFilter === "executed") return p.executed;
     if (proposalFilter === "passed") return isPassed;
@@ -365,6 +399,7 @@ export default function App() {
         account={account}
         network={network}
         isMember={isMember}
+        balance={summary.balance}
         onConnect={connectWallet}
         onJoinClub={handleJoinClub}
         onLeaveClub={handleLeaveClub}

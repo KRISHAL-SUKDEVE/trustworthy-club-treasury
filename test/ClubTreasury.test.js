@@ -576,5 +576,117 @@ describe("Trustworthy Club Treasury - Comprehensive Security & Functional Tests"
       ).to.be.revertedWith("Voting duration must be at least 30 seconds");
     });
   });
+
+  describe("9. Deep Invariant Edge Cases & Membership Dynamics", function () {
+    it("Correctly returns REJECTED and reverts execution when activeMemberCount drops to 0", async function () {
+      await treasury.connect(owner).createProposal(
+        0,
+        vendor.address,
+        ethers.parseEther("0.05"),
+        "Solo Genesis Action",
+        "Testing activeMemberCount = 0",
+        60
+      );
+
+      // Deployer resigns
+      await treasury.connect(owner).leaveClub();
+      expect(await treasury.activeMemberCount()).to.equal(0);
+
+      await time.increase(65);
+
+      // Proposal must be REJECTED, not PASSED
+      expect(await treasury.getProposalStatus(0)).to.equal("REJECTED");
+      await expect(treasury.executeProposal(0)).to.be.revertedWith(
+        "No active members in club"
+      );
+    });
+
+    it("Maintains REJECTED status indefinitely past 7-day window if quorum was never met", async function () {
+      await treasury.connect(alice).joinClub({ value: membershipFee });
+      await treasury.connect(bob).joinClub({ value: membershipFee });
+      // 3 active members => quorum is 2 votes
+      await treasury.connect(alice).createProposal(
+        0,
+        vendor.address,
+        ethers.parseEther("0.1"),
+        "Ignored Proposal",
+        "No one votes except proposer",
+        60
+      );
+
+      // Total votes: 1 (Alice). Quorum: 2.
+      // Advance past voting deadline AND past 7-day execution window
+      const sevenDays = 7 * 24 * 60 * 60;
+      await time.increase(60 + sevenDays + 300);
+
+      // Must remain REJECTED because it was never approved, NOT EXPIRED
+      expect(await treasury.getProposalStatus(0)).to.equal("REJECTED");
+      await expect(treasury.executeProposal(0)).to.be.revertedWith(
+        "Invariant: Proposal has expired"
+      );
+    });
+
+    it("Dynamically recalculates quorum at execution time when membership fluctuates", async function () {
+      // Setup 5 members: owner, alice, bob, charlie, vendor
+      await treasury.connect(alice).joinClub({ value: membershipFee });
+      await treasury.connect(bob).joinClub({ value: membershipFee });
+      await treasury.connect(charlie).joinClub({ value: membershipFee });
+      await treasury.connect(vendor).joinClub({ value: membershipFee });
+      expect(await treasury.activeMemberCount()).to.equal(5);
+
+      // 5 members -> minQuorum = ceil(5*20/100) = 1 -> minQuorum < 2 -> 2 votes
+      await treasury.connect(alice).createProposal(
+        0,
+        vendor.address,
+        ethers.parseEther("0.1"),
+        "Equipment Purchase",
+        "Cable cords",
+        60
+      );
+
+      // Alice auto-voted YES (1 vote). Bob votes YES (2 votes total).
+      await treasury.connect(bob).vote(0, true);
+
+      // Suppose charlie, vendor, and owner all leave before execution
+      await treasury.connect(charlie).leaveClub();
+      await treasury.connect(vendor).leaveClub();
+      await treasury.connect(owner).leaveClub();
+      expect(await treasury.activeMemberCount()).to.equal(2);
+
+      await time.increase(65);
+
+      // 2 members left, minQuorum is 2, 2 votes were cast -> executes successfully!
+      expect(await treasury.getProposalStatus(0)).to.equal("PASSED");
+      await expect(treasury.connect(alice).executeProposal(0))
+        .to.emit(treasury, "ProposalExecuted")
+        .withArgs(0, alice.address, ethers.parseEther("0.1"), anyValue);
+    });
+
+    it("Allows former members to rejoin cleanly and participate in new votes", async function () {
+      await treasury.connect(alice).joinClub({ value: membershipFee });
+      expect(await treasury.isMember(alice.address)).to.be.true;
+
+      await treasury.connect(alice).leaveClub();
+      expect(await treasury.isMember(alice.address)).to.be.false;
+
+      // Alice rejoins
+      await treasury.connect(alice).joinClub({ value: membershipFee });
+      expect(await treasury.isMember(alice.address)).to.be.true;
+      expect(await treasury.activeMemberCount()).to.equal(2);
+
+      // Alice can create proposal and vote
+      await expect(
+        treasury.connect(alice).createProposal(
+          0,
+          vendor.address,
+          ethers.parseEther("0.05"),
+          "Rejoined Member Proposal",
+          "Test after rejoining",
+          60
+        )
+      ).to.emit(treasury, "ProposalCreated");
+    });
+  });
 });
+
 

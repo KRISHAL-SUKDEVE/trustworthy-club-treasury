@@ -9,17 +9,17 @@ export default function AuditTrail({ outflows, inflows, contractAddress }) {
   const filteredOutflows = outflows.filter((item) => {
     const term = searchTerm.toLowerCase();
     return (
-      item.purpose.toLowerCase().includes(term) ||
-      item.recipient.toLowerCase().includes(term) ||
-      item.proposalId.toString().includes(term)
+      (item.purpose || "").toLowerCase().includes(term) ||
+      (item.recipient || "").toLowerCase().includes(term) ||
+      (item.proposalId !== undefined ? item.proposalId.toString() : "").includes(term)
     );
   });
 
   const filteredInflows = inflows.filter((item) => {
     const term = searchTerm.toLowerCase();
     return (
-      item.note.toLowerCase().includes(term) ||
-      item.sender.toLowerCase().includes(term)
+      (item.note || "").toLowerCase().includes(term) ||
+      (item.sender || "").toLowerCase().includes(term)
     );
   });
 

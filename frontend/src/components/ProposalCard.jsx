@@ -24,7 +24,7 @@ export default function ProposalCard({
   const isExpired = timeRemaining.expired;
   const isWindowExpired = now > Number(votingDeadline) + 7 * 86400;
 
-  const activeCount = memberCount ? Number(memberCount) : 1;
+  const activeCount = memberCount !== undefined && memberCount !== null ? Number(memberCount) : 1;
   let minQuorum = Math.ceil((activeCount * 20) / 100);
   if (minQuorum < 2 && activeCount > 1) { minQuorum = 2; }
   if (minQuorum === 0) { minQuorum = 1; }
@@ -37,16 +37,16 @@ export default function ProposalCard({
   if (executed) {
     status = "EXECUTED";
     statusBadgeClass = "bg-purple-500/10 text-purple-400 border-purple-500/20";
-  } else if (isWindowExpired) {
-    status = "EXPIRED";
-    statusBadgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
   } else if (isExpired) {
-    if (hasQuorum && Number(yesVotes) > Number(noVotes)) {
-      status = "PASSED (READY)";
-      statusBadgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
-    } else {
+    if (activeCount === 0 || !hasQuorum || Number(yesVotes) <= Number(noVotes)) {
       status = "REJECTED";
       statusBadgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+    } else if (isWindowExpired) {
+      status = "EXPIRED";
+      statusBadgeClass = "bg-amber-500/10 text-amber-400 border-amber-500/20";
+    } else {
+      status = "PASSED (READY)";
+      statusBadgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
     }
   }
 
@@ -150,6 +150,8 @@ export default function ProposalCard({
                   <Check className="w-3.5 h-3.5 text-teal-400" />
                   <span>You voted {userVoteChoice ? "YES" : "NO"}</span>
                 </div>
+              ) : !account ? (
+                <span className="text-[11px] text-slate-400 italic">Connect wallet to vote</span>
               ) : isMember ? (
                 <div className="flex items-center space-x-2">
                   <button

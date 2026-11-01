@@ -27,6 +27,11 @@ export default function CreateProposalModal({ isOpen, onClose, onSubmit, treasur
       return;
     }
 
+    if (recipient.trim().toLowerCase() === ethers.ZeroAddress.toLowerCase()) {
+      setError("Recipient address cannot be the zero address (0x0).");
+      return;
+    }
+
     let parsedAmount = 0n;
     if (pType === 0) {
       if (!amountEth || parseFloat(amountEth) <= 0) {
