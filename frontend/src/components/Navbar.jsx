@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { ShieldCheck, Wallet, ChevronDown, CheckCircle2, UserCheck, UserPlus, ExternalLink, Settings } from "lucide-react";
+import { ShieldCheck, Wallet, ChevronDown, CheckCircle2, UserCheck, UserPlus, ExternalLink, Settings, LogOut } from "lucide-react";
 import { shortenAddress } from "../utils/formatters";
 
 export default function Navbar({
@@ -9,6 +9,7 @@ export default function Navbar({
   balance,
   onConnect,
   onJoinClub,
+  onLeaveClub,
   membershipFee,
   contractAddress,
   onUpdateContractAddress,
@@ -62,9 +63,22 @@ export default function Navbar({
           {account && (
             <>
               {isMember ? (
-                <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                  <UserCheck className="w-3.5 h-3.5" />
-                  <span>Member</span>
+                <div className="flex items-center space-x-1.5">
+                  <div className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                    <UserCheck className="w-3.5 h-3.5" />
+                    <span>Member</span>
+                  </div>
+                  {onLeaveClub && (
+                    <button
+                      onClick={onLeaveClub}
+                      disabled={isLoading}
+                      title="Resign / Leave Club"
+                      className="flex items-center space-x-1 px-2.5 py-1.5 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 text-xs font-medium transition"
+                    >
+                      <LogOut className="w-3 h-3" />
+                      <span className="hidden sm:inline">Leave</span>
+                    </button>
+                  )}
                 </div>
               ) : (
                 <button

@@ -110,16 +110,21 @@ export default function App() {
         const memberStatus = await contract.isMember(account).catch(() => false);
         setIsMember(memberStatus);
 
-        // Fetch user vote state for each proposal
-        const votes = {};
-        for (let i = 0; i < allProps.length; i++) {
-          const hasVoted = await contract.hasVoted(i, account).catch(() => false);
+        // Fetch user vote state for each proposal in parallel
+        const votePromises = allProps.map(async (prop) => {
+          const pId = Number(prop.id);
+          const voted = await contract.hasVoted(pId, account).catch(() => false);
           let choice = false;
-          if (hasVoted) {
-            choice = await contract.voteChoice(i, account).catch(() => false);
+          if (voted) {
+            choice = await contract.voteChoice(pId, account).catch(() => false);
           }
-          votes[i] = { hasVoted, choice };
-        }
+          return { id: pId, hasVoted: voted, choice };
+        });
+        const voteResults = await Promise.all(votePromises);
+        const votes = {};
+        voteResults.forEach((res) => {
+          votes[res.id] = { hasVoted: res.hasVoted, choice: res.choice };
+        });
         setUserVotes(votes);
       }
     } catch (err) {
@@ -214,6 +219,24 @@ export default function App() {
     }
   };
 
+  // Action: Leave Club
+  const handleLeaveClub = async () => {
+    try {
+      setIsLoading(true);
+      showToast("loading", "Submitting resignation to blockchain...", 0);
+      const contract = await getContract(true);
+      const tx = await contract.leaveClub();
+      showToast("loading", "Mining transaction on-chain...", 0);
+      await tx.wait();
+      showToast("success", "You have successfully resigned from the club.");
+      await loadTreasuryData();
+    } catch (err) {
+      showToast("error", err?.reason || err?.message || "Failed to leave club.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Action: Deposit ETH
   const handleDeposit = async ({ amount, note }) => {
     try {
@@ -295,11 +318,23 @@ export default function App() {
   const filteredProposals = proposals.filter((p) => {
     if (proposalFilter === "all") return true;
     const now = Math.floor(Date.now() / 1000);
-    const isExpired = Number(p.votingDeadline) <= now;
+    const isDeadlinePassed = Number(p.votingDeadline) <= now;
+    const isWindowExpired = now > Number(p.votingDeadline) + 7 * 86400;
+
+    const activeCount = Number(summary.memberCount || 1n);
+    let minQuorum = Math.ceil((activeCount * 20) / 100);
+    if (minQuorum < 2 && activeCount > 1) { minQuorum = 2; }
+    if (minQuorum === 0) { minQuorum = 1; }
+
+    const totalVotes = Number(p.yesVotes) + Number(p.noVotes);
+    const hasQuorum = totalVotes >= minQuorum;
+    const isPassed = isDeadlinePassed && !p.executed && !isWindowExpired && hasQuorum && Number(p.yesVotes) > Number(p.noVotes);
+    const isRejected = isDeadlinePassed && !p.executed && (isWindowExpired || !hasQuorum || Number(p.yesVotes) <= Number(p.noVotes));
 
     if (proposalFilter === "executed") return p.executed;
-    if (proposalFilter === "passed") return isExpired && !p.executed && Number(p.yesVotes) > Number(p.noVotes);
-    if (proposalFilter === "active") return !isExpired && !p.executed;
+    if (proposalFilter === "passed") return isPassed;
+    if (proposalFilter === "rejected") return isRejected;
+    if (proposalFilter === "active") return !isDeadlinePassed && !p.executed;
     return true;
   });
 
@@ -332,6 +367,7 @@ export default function App() {
         isMember={isMember}
         onConnect={connectWallet}
         onJoinClub={handleJoinClub}
+        onLeaveClub={handleLeaveClub}
         membershipFee={membershipFee}
         contractAddress={contractAddress}
         onUpdateContractAddress={handleUpdateContractAddress}
@@ -391,7 +427,7 @@ export default function App() {
           {/* Subfilter for Proposals */}
           {activeTab === "proposals" && (
             <div className="flex items-center space-x-1.5 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs">
-              {["all", "active", "passed", "executed"].map((filter) => (
+              {["all", "active", "passed", "rejected", "executed"].map((filter) => (
                 <button
                   key={filter}
                   onClick={() => setProposalFilter(filter)}
@@ -440,6 +476,7 @@ export default function App() {
                     userVoteChoice={userVotes[Number(prop.id)]?.choice}
                     isMember={isMember}
                     account={account}
+                    memberCount={summary.memberCount}
                     onVote={handleVote}
                     onExecute={handleExecute}
                     isLoading={isLoading}
@@ -463,8 +500,10 @@ export default function App() {
         {activeTab === "members" && (
           <MembersDirectory
             members={members}
+            memberCount={summary.memberCount}
             isMember={isMember}
             onJoinClub={handleJoinClub}
+            onLeaveClub={handleLeaveClub}
             membershipFee={membershipFee}
             account={account}
             isLoading={isLoading}

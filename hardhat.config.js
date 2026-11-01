@@ -1,3 +1,14 @@
+require("dotenv").config();
+const path = require("path");
+
+// Ensure Hardhat can store local cache/data without EPERM in restricted or sandbox environments
+if (!process.env.LOCALAPPDATA || process.env.LOCALAPPDATA.includes("AppData\\Local")) {
+  process.env.LOCALAPPDATA = path.join(__dirname, ".localappdata");
+}
+if (!process.env.APPDATA || process.env.APPDATA.includes("AppData\\Roaming")) {
+  process.env.APPDATA = path.join(__dirname, ".appdata");
+}
+
 require("@nomicfoundation/hardhat-toolbox");
 
 /** @type import('hardhat/config').HardhatUserConfig */

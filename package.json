@@ -1,12 +1,21 @@
 {
   "name": "vibe-chain-treasury",
   "version": "1.0.0",
-  "description": "",
+  "description": "Democratic and transparent decentralized campus club treasury built for MERAZ 7.0 - VIBECHAIN.",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "compile": "node scripts/compile.js",
+    "test": "hardhat test --no-compile",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia"
   },
-  "keywords": [],
+  "keywords": [
+    "treasury",
+    "governance",
+    "solidity",
+    "hardhat",
+    "web3"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
@@ -15,6 +24,7 @@
     "hardhat": "^2.29.1"
   },
   "dependencies": {
+    "dotenv": "^16.4.5",
     "solc": "^0.8.20"
   }
 }

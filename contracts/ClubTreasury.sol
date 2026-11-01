@@ -79,14 +79,46 @@ contract ClubTreasury {
     // -------------------------------------------------------------------------
     // State Variables
     // -------------------------------------------------------------------------
+    uint256 public constant EXECUTION_WINDOW = 7 days;
     string public clubName;
     string public clubDescription;
     uint256 public membershipFee; // Fee to join via direct application (in wei)
     
-    // Membership Tracking
+    // Membership Tracking (O(1) swap-and-pop)
     mapping(address => bool) public isMember;
     address[] public memberList;
     uint256 public activeMemberCount;
+    mapping(address => uint256) private _memberIndex;
+
+    function _addMember(address account) internal {
+        if (!isMember[account]) {
+            isMember[account] = true;
+            _memberIndex[account] = memberList.length;
+            memberList.push(account);
+            activeMemberCount++;
+        }
+    }
+
+    function _removeMember(address account) internal {
+        if (isMember[account]) {
+            isMember[account] = false;
+            uint256 indexToRemove = _memberIndex[account];
+            uint256 lastIndex = memberList.length - 1;
+
+            if (indexToRemove != lastIndex) {
+                address lastMember = memberList[lastIndex];
+                memberList[indexToRemove] = lastMember;
+                _memberIndex[lastMember] = indexToRemove;
+            }
+
+            memberList.pop();
+            delete _memberIndex[account];
+
+            if (activeMemberCount > 0) {
+                activeMemberCount--;
+            }
+        }
+    }
 
     // Financial Metrics
     uint256 public totalInflow;
@@ -162,9 +194,7 @@ contract ClubTreasury {
         membershipFee = _membershipFee;
 
         // Bootstrap initial member
-        isMember[msg.sender] = true;
-        memberList.push(msg.sender);
-        activeMemberCount = 1;
+        _addMember(msg.sender);
         emit MemberJoined(msg.sender, 0, block.timestamp);
 
         // Record initial funding if provided during deployment
@@ -220,9 +250,7 @@ contract ClubTreasury {
         require(!isMember[msg.sender], "Already an active member");
         require(msg.value >= membershipFee, "Sent amount is below required membership fee");
 
-        isMember[msg.sender] = true;
-        memberList.push(msg.sender);
-        activeMemberCount++;
+        _addMember(msg.sender);
 
         if (msg.value > 0) {
             totalInflow += msg.value;
@@ -241,10 +269,7 @@ contract ClubTreasury {
      * @notice Allows a member to voluntarily resign from club voting and participation.
      */
     function leaveClub() external onlyMember {
-        isMember[msg.sender] = false;
-        if (activeMemberCount > 0) {
-            activeMemberCount--;
-        }
+        _removeMember(msg.sender);
         emit MemberLeft(msg.sender, block.timestamp);
     }
 
@@ -358,6 +383,13 @@ contract ClubTreasury {
         // Safety Invariant 3: An action rejected, expired, or never authorized must not move funds.
         require(!prop.executed, "Invariant: Proposal already executed");
         require(block.timestamp >= prop.votingDeadline, "Voting deadline has not elapsed yet");
+        require(block.timestamp <= prop.votingDeadline + EXECUTION_WINDOW, "Invariant: Proposal has expired");
+        require(activeMemberCount > 0, "No active members in club");
+
+        uint256 minQuorum = (activeMemberCount * 20 + 99) / 100;
+        if (minQuorum < 2 && activeMemberCount > 1) { minQuorum = 2; }
+        if (minQuorum == 0) { minQuorum = 1; }
+        require(prop.yesVotes + prop.noVotes >= minQuorum, "Invariant: Quorum not reached");
         require(prop.yesVotes > prop.noVotes, "Proposal rejected: YES votes must strictly exceed NO votes");
 
         // Mark executed BEFORE moving any funds (Checks-Effects-Interactions)
@@ -382,17 +414,12 @@ contract ClubTreasury {
             require(success, "External transfer failed");
         } else if (prop.pType == ProposalType.ADD_MEMBER) {
             if (!isMember[prop.recipient]) {
-                isMember[prop.recipient] = true;
-                memberList.push(prop.recipient);
-                activeMemberCount++;
+                _addMember(prop.recipient);
                 emit MemberAddedByVote(prop.recipient, proposalId);
             }
         } else if (prop.pType == ProposalType.REMOVE_MEMBER) {
             if (isMember[prop.recipient]) {
-                isMember[prop.recipient] = false;
-                if (activeMemberCount > 0) {
-                    activeMemberCount--;
-                }
+                _removeMember(prop.recipient);
                 emit MemberRemovedByVote(prop.recipient, proposalId);
             }
         }
@@ -415,6 +442,17 @@ contract ClubTreasury {
         }
         if (block.timestamp < prop.votingDeadline) {
             return "ACTIVE";
+        }
+        if (block.timestamp > prop.votingDeadline + EXECUTION_WINDOW) {
+            return "EXPIRED";
+        }
+
+        uint256 minQuorum = (activeMemberCount * 20 + 99) / 100;
+        if (minQuorum < 2 && activeMemberCount > 1) { minQuorum = 2; }
+        if (minQuorum == 0) { minQuorum = 1; }
+
+        if (prop.yesVotes + prop.noVotes < minQuorum) {
+            return "REJECTED";
         }
         if (prop.yesVotes > prop.noVotes) {
             return "PASSED";

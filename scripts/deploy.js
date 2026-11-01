@@ -18,9 +18,20 @@ async function main() {
   const clubDescription = "Transparent decentralized treasury for events, bounties, and equipment.";
   const membershipFee = hre.ethers.parseEther("0.005"); // 0.005 ETH to join
 
+  // Genesis deposit: dynamically adjust seed funding based on deployer balance for safe testnet deployment
+  let seedValue = 0n;
+  if (balance >= hre.ethers.parseEther("0.1")) {
+    seedValue = hre.ethers.parseEther("0.05");
+  } else if (balance >= hre.ethers.parseEther("0.01")) {
+    seedValue = hre.ethers.parseEther("0.002");
+  } else {
+    seedValue = 0n;
+  }
+  console.log(`Genesis Treasury seed funding: ${hre.ethers.formatEther(seedValue)} ETH`);
+
   const ClubTreasury = await hre.ethers.getContractFactory("ClubTreasury");
   const treasury = await ClubTreasury.deploy(clubName, clubDescription, membershipFee, {
-    value: hre.ethers.parseEther("0.05"), // Genesis seed deposit of 0.05 ETH
+    value: seedValue,
   });
 
   await treasury.waitForDeployment();

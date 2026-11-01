@@ -8,6 +8,7 @@ export default function ProposalCard({
   userVoteChoice,
   isMember,
   account,
+  memberCount,
   onVote,
   onExecute,
   isLoading,
@@ -18,8 +19,16 @@ export default function ProposalCard({
   const yesPercent = totalVotes > 0 ? Math.round((Number(yesVotes) / totalVotes) * 100) : 0;
   const noPercent = totalVotes > 0 ? 100 - yesPercent : 0;
 
+  const now = Math.floor(Date.now() / 1000);
   const timeRemaining = getTimeRemaining(votingDeadline);
   const isExpired = timeRemaining.expired;
+  const isWindowExpired = now > Number(votingDeadline) + 7 * 86400;
+
+  const activeCount = memberCount ? Number(memberCount) : 1;
+  let minQuorum = Math.ceil((activeCount * 20) / 100);
+  if (minQuorum < 2 && activeCount > 1) { minQuorum = 2; }
+  if (minQuorum === 0) { minQuorum = 1; }
+  const hasQuorum = totalVotes >= minQuorum;
 
   // Determine on-chain state
   let status = "ACTIVE";
@@ -28,8 +37,11 @@ export default function ProposalCard({
   if (executed) {
     status = "EXECUTED";
     statusBadgeClass = "bg-purple-500/10 text-purple-400 border-purple-500/20";
+  } else if (isWindowExpired) {
+    status = "EXPIRED";
+    statusBadgeClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
   } else if (isExpired) {
-    if (Number(yesVotes) > Number(noVotes)) {
+    if (hasQuorum && Number(yesVotes) > Number(noVotes)) {
       status = "PASSED (READY)";
       statusBadgeClass = "bg-emerald-500/10 text-emerald-400 border-emerald-500/20";
     } else {
@@ -116,7 +128,7 @@ export default function ProposalCard({
           ></div>
         </div>
         <div className="flex items-center justify-between text-[11px] text-slate-400">
-          <span>Total votes: {totalVotes}</span>
+          <span>Total votes: {totalVotes} (Quorum: {minQuorum})</span>
           <span>{timeRemaining.text}</span>
         </div>
       </div>
@@ -169,7 +181,13 @@ export default function ProposalCard({
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-bold text-xs transition shadow-lg shadow-emerald-500/20 flex items-center space-x-1.5 animate-pulse"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Execute Proposal &amp; Pay Out</span>
+              <span>
+                {pTypeNum === 0
+                  ? "Execute Payout & Disburse Funds"
+                  : pTypeNum === 1
+                  ? "Execute Member Addition"
+                  : "Execute Member Removal"}
+              </span>
             </button>
           )}
 

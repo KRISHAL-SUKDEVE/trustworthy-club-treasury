@@ -2,7 +2,7 @@ import React from "react";
 import { Users, UserCheck, Shield, Award, UserPlus } from "lucide-react";
 import { shortenAddress } from "../utils/formatters";
 
-export default function MembersDirectory({ members, isMember, onJoinClub, membershipFee, account, isLoading }) {
+export default function MembersDirectory({ members, memberCount, isMember, onJoinClub, onLeaveClub, membershipFee, account, isLoading }) {
   return (
     <div className="glass-panel rounded-3xl border border-slate-800/80 p-6 sm:p-8 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -10,7 +10,7 @@ export default function MembersDirectory({ members, isMember, onJoinClub, member
           <div className="flex items-center space-x-2">
             <h2 className="text-xl font-bold text-white tracking-tight">Club Governance &amp; Members</h2>
             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-sky-500/10 text-sky-300 border border-sky-500/20">
-              {members.length} Voting Members
+              {memberCount !== undefined && memberCount !== null ? memberCount.toString() : members.length} Active Members
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -88,9 +88,21 @@ export default function MembersDirectory({ members, isMember, onJoinClub, member
                 </div>
               </div>
               {isCurrentUser && (
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
-                  You
-                </span>
+                <div className="flex items-center space-x-1.5">
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-teal-500/20 text-teal-300 border border-teal-500/30">
+                    You
+                  </span>
+                  {onLeaveClub && (
+                    <button
+                      onClick={onLeaveClub}
+                      disabled={isLoading}
+                      title="Resign from club"
+                      className="px-2 py-0.5 rounded-full text-[9px] font-semibold bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 transition"
+                    >
+                      Leave
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           );
